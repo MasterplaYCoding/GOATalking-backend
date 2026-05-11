@@ -1,5 +1,4 @@
-import { pollListsTable, pollsTable } from "./models/db";
-import { Poll } from "./models/poll";
+import { prisma } from "./db";
 
 export const typeDefs = `#graphql
   type Option {
@@ -80,150 +79,175 @@ export const typeDefs = `#graphql
 
 export const resolvers = {
   Query: {
-    getPolls: (_: any, { page = 1, limit = 10 }: { page: number; limit: number }) => {
-      const startIndex = (page - 1) * limit;
-      const endIndex = page * limit;
-      const paginatedPolls = pollsTable.slice(startIndex, endIndex);
+    getPolls: async (_: any, { page = 1, limit = 10 }: { page: number; limit: number }) => {
+      const skip = (page - 1) * limit;
       
+      const [polls, totalItems] = await Promise.all([
+        prisma.poll.findMany({
+          skip,
+          take: limit,
+          include: { options: true }
+        }),
+        prisma.poll.count()
+      ]);
+
       return {
-        data: paginatedPolls,
+        data: polls.map(p => ({ ...p, dateCreated: p.dateCreated.toISOString(), ownerId: p.ownerId || "" })),
         meta: {
-          totalItems: pollsTable.length,
+          totalItems,
           currentPage: page,
-          totalPages: Math.ceil(pollsTable.length / limit),
+          totalPages: Math.ceil(totalItems / limit),
           itemsPerPage: limit
         }
       };
     },
-    getPollById: (_: any, { id }: { id: string }) => {
-      return pollsTable.find(p => p.id === id);
+    
+    getPollById: async (_: any, { id }: { id: string }) => {
+      const poll = await prisma.poll.findUnique({
+        where: { id },
+        include: { options: true }
+      });
+      return poll ? { ...poll, dateCreated: poll.dateCreated.toISOString(), ownerId: poll.ownerId || "" } : null;
     },
-    getPollsByUser: (_: any, { userId }: { userId: string }) => {
-      return pollsTable.filter(p => p.ownerId === userId);
+    
+    getPollsByUser: async (_: any, { userId }: { userId: string }) => {
+      const polls = await prisma.poll.findMany({
+        where: { ownerId: userId },
+        include: { options: true }
+      });
+      return polls.map(p => ({ ...p, dateCreated: p.dateCreated.toISOString(), ownerId: p.ownerId || "" }));
     },
-    getPollStats: () => {
-      const totalPolls = pollsTable.length;
-      const totalInteractions = pollsTable.reduce((sum, poll) => sum + poll.interactionCount, 0);
-      
-      let mostPopular = null;
-      if (totalPolls > 0) {
-        mostPopular = [...pollsTable].sort((a, b) => b.interactionCount - a.interactionCount)[0];
-      }
+    
+    getPollStats: async () => {
+      const totalPolls = await prisma.poll.count();
+      const aggregate = await prisma.poll.aggregate({
+        _sum: { interactionCount: true }
+      });
+      const mostPopular = await prisma.poll.findFirst({
+        orderBy: { interactionCount: 'desc' }
+      });
 
       return {
         totalPolls,
-        totalInteractions,
+        totalInteractions: aggregate._sum.interactionCount || 0,
         mostPopularPollId: mostPopular?.id || null
       };
     },
-    getPollLists: () => {
-      return pollListsTable;
+    
+    getPollLists: async () => {
+      const lists = await prisma.pollList.findMany();
+      return lists.map(l => ({ ...l, createdAt: l.createdAt.toISOString(), ownerId: l.ownerId || "" }));
     },
-    getPollListStats: (_: any, { listId }: { listId?: string }) => {
-      const listPolls = pollsTable.filter(p => p.listId === listId || (!p.listId && !listId));
+    
+    getPollListStats: async (_: any, { listId }: { listId?: string }) => {
+      const whereClause = listId ? { listId } : { listId: null };
       
-      const pollCount = listPolls.length;
-      const totalInteractions = listPolls.reduce((sum, poll) => sum + poll.interactionCount, 0);
+      const pollCount = await prisma.poll.count({ where: whereClause });
+      const aggregate = await prisma.poll.aggregate({
+        _sum: { interactionCount: true },
+        where: whereClause
+      });
 
       return {
         listId: listId || null,
         pollCount,
-        totalInteractions
+        totalInteractions: aggregate._sum.interactionCount || 0
       };
     }
   },
+  
   Mutation: {
-    createPoll: (_: any, args: any) => {
-      const newPoll: Poll = {
-        id: Date.now().toString(),
-        title: args.title,
-        category: args.category,
-        description: args.description,
-        imageUrl: args.imageUrl || "/logo.png",
-        dateCreated: new Date(),        
-        interactionCount: 0,
-        ownerId: "system-user",
-        options: args.options.map((opt: any) => ({
-          id: Math.random().toString(36).substring(7),
-          text: opt.text,
-          votes: 0
-        }))
-      };
-
-      pollsTable.push(newPoll);
-      return newPoll;
-    },
-    updatePoll: (_: any, { id, ...updates }: any) => {
-      const index = pollsTable.findIndex(p => p.id === id);
-      if (index === -1) return null;
-      
-      pollsTable[index] = { ...pollsTable[index], ...updates };
-      return pollsTable[index];
-    },
-    deletePoll: (_: any, { id }: { id: string }) => {
-      const index = pollsTable.findIndex(p => p.id === id);
-      if (index === -1) return false;
-      
-      pollsTable.splice(index, 1);
-      return true;
-    },
-    votePoll: (_: any, { pollId, optionId }: { pollId: string; optionId: string }) => {
-      const pollIndex = pollsTable.findIndex(p => p.id === pollId);
-      if (pollIndex === -1) throw new Error("Poll not found");
-      
-      const poll = pollsTable[pollIndex];
-
-      const option = poll.options.find(opt => opt.id === optionId);
-      if (!option) throw new Error("Option not found");
-
-      option.votes += 1;
-      poll.interactionCount += 1;
-
-      return poll;
-    },
-    createPollList: (_: any, args: { name: string; description: string; ownerId: string }) => {
-      const newList = {
-        id: Date.now().toString(),
-        name: args.name,
-        description: args.description,
-        createdAt: new Date(),        
-        ownerId: args.ownerId,
-      };
-      pollListsTable.push(newList);
-      return newList;
-    },
-
-    updatePollList: (_: any, { id, name, description }: { id: string; name?: string; description?: string }) => {
-      const index = pollListsTable.findIndex(l => l.id === id);
-      if (index === -1) throw new Error("List not found");
-
-      if (name !== undefined) pollListsTable[index].name = name;
-      if (description !== undefined) pollListsTable[index].description = description;
-
-      return pollListsTable[index];
-    },
-
-    deletePollList: (_: any, { id }: { id: string }) => {
-      const index = pollListsTable.findIndex(l => l.id === id);
-      if (index === -1) return false;
-
-      pollListsTable.splice(index, 1);
-
-      pollsTable.forEach(poll => {
-        if (poll.listId === id) {
-          poll.listId = null;
-        }
+    createPoll: async (_: any, args: any) => {
+      const newPoll = await prisma.poll.create({
+        data: {
+          title: args.title,
+          category: args.category,
+          description: args.description,
+          imageUrl: args.imageUrl || "/logo.png",
+          ownerId: "system-user",
+          options: {
+            create: args.options.map((opt: any) => ({
+              text: opt.text,
+              votes: 0
+            }))
+          }
+        },
+        include: { options: true }
       });
 
-      return true;
+      return { ...newPoll, dateCreated: newPoll.dateCreated.toISOString(), ownerId: newPoll.ownerId || "" };
+    },
+    
+    updatePoll: async (_: any, { id, interactionCount }: any) => {
+      const data: any = {};
+      if (interactionCount !== undefined) data.interactionCount = interactionCount;
+
+      const updatedPoll = await prisma.poll.update({
+        where: { id },
+        data,
+        include: { options: true }
+      });
+      return { ...updatedPoll, dateCreated: updatedPoll.dateCreated.toISOString(), ownerId: updatedPoll.ownerId || "" };
+    },
+    
+    deletePoll: async (_: any, { id }: { id: string }) => {
+      try {
+        await prisma.poll.delete({ where: { id } });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    
+    votePoll: async (_: any, { pollId, optionId }: { pollId: string; optionId: string }) => {
+      await prisma.pollOption.update({
+        where: { id: optionId },
+        data: { votes: { increment: 1 } }
+      });
+
+      const updatedPoll = await prisma.poll.update({
+        where: { id: pollId },
+        data: { interactionCount: { increment: 1 } },
+        include: { options: true }
+      });
+
+      return { ...updatedPoll, dateCreated: updatedPoll.dateCreated.toISOString(), ownerId: updatedPoll.ownerId || "" };
+    },
+    
+    createPollList: async (_: any, args: { name: string; description: string; ownerId: string }) => {
+      const newList = await prisma.pollList.create({
+        data: {
+          name: args.name,
+          description: args.description
+        }
+      });
+      return { ...newList, createdAt: newList.createdAt.toISOString(), ownerId: args.ownerId };
     },
 
-    assignPollToList: (_: any, { pollId, listId }: { pollId: string; listId?: string }) => {
-      const poll = pollsTable.find(p => p.id === pollId);
-      if (!poll) throw new Error("Poll not found");
+    updatePollList: async (_: any, { id, name, description }: { id: string; name?: string; description?: string }) => {
+      const updatedList = await prisma.pollList.update({
+        where: { id },
+        data: { name, description }
+      });
+      return { ...updatedList, createdAt: updatedList.createdAt.toISOString(), ownerId: updatedList.ownerId || "" };
+    },
 
-      poll.listId = listId || null; 
-      return poll;
+    deletePollList: async (_: any, { id }: { id: string }) => {
+      try {
+        await prisma.pollList.delete({ where: { id } });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    assignPollToList: async (_: any, { pollId, listId }: { pollId: string; listId?: string }) => {
+      const updatedPoll = await prisma.poll.update({
+        where: { id: pollId },
+        data: { listId: listId || null },
+        include: { options: true }
+      });
+      return { ...updatedPoll, dateCreated: updatedPoll.dateCreated.toISOString(), ownerId: updatedPoll.ownerId || "" };
     }
   }
 };

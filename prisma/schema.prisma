@@ -1,0 +1,160 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String
+  avatarUrl    String
+  email        String   @unique
+  passwordHash String
+
+  pollLists    PollList[]
+  polls        Poll[]
+  responses    MarginalityTestResponse[]
+  pollVotes    PollVote[]
+}
+
+model PollList {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  
+  polls       Poll[]
+}
+
+model Poll {
+  id               String   @id @default(uuid())
+  title            String
+  imageUrl         String
+  description      String
+  category         String
+  dateCreated      DateTime @default(now())
+  interactionCount Int      @default(0)
+
+  ownerId          String?
+  owner            User?    @relation(fields: [ownerId], references: [id])
+  
+  listId           String?
+  list             PollList? @relation(fields: [listId], references: [id])
+
+  options          PollOption[]
+  votes            PollVote[]
+}
+
+model PollOption {
+  id     String @id @default(uuid())
+  text   String
+  votes  Int    @default(0) 
+
+  pollId String
+  poll   Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  userId String?
+
+  pollVotes PollVote[]
+}
+
+model PollVote {
+  id       String @id @default(uuid())
+  
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  
+  pollId   String
+  poll     Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  
+  optionId String
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pollId]) 
+}
+
+model MarginalityTest {
+  id          String   @id @default(uuid())
+  title       String
+  topic       String
+  description String
+  createdAt   DateTime @default(now())
+
+  categoryDefs CategoryDefinition[]
+  questions    MarginalityQuestion[]
+  responses    MarginalityTestResponse[]
+}
+
+model CategoryDefinition {
+  id                     String  @id @default(uuid())
+  key                    String
+  label                  String
+  inputType              String  
+  required               Boolean @default(false)
+  placeholder            String?
+  options                String? 
+  min                    Float?
+  max                    Float?
+  isDerived              Boolean @default(false)
+  derivedFromKey         String?
+  derivedStrategy        String?
+  includeInQuestionStats Boolean @default(false)
+  includeInReport        Boolean @default(false)
+
+  testId                 String
+  test                   MarginalityTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  values                 CategoryValue[]
+}
+
+model MarginalityQuestion {
+  id     String @id @default(uuid())
+  text   String
+
+  testId String
+  test   MarginalityTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  answers QuestionAgreementVote[]
+}
+
+model MarginalityTestResponse {
+  id          String   @id @default(uuid())
+  submittedAt DateTime @default(now())
+
+  testId      String
+  test        MarginalityTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+
+  categoryValues CategoryValue[]
+  votes          QuestionAgreementVote[]
+}
+
+model CategoryValue {
+  id             String @id @default(uuid())
+  value          String
+
+  responseId     String
+  response       MarginalityTestResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  
+  definitionId   String
+  definition     CategoryDefinition @relation(fields: [definitionId], references: [id])
+}
+
+model QuestionAgreementVote {
+  id         String @id @default(uuid())
+  agreement  Float
+
+  responseId String
+  response   MarginalityTestResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  
+  questionId String
+  question   MarginalityQuestion     @relation(fields: [questionId], references: [id])
+}

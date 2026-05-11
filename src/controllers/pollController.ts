@@ -1,104 +1,111 @@
 import { Request, Response } from "express";
-import { pollsTable } from "../models/db";
-import { Poll } from "../models/poll";
+import { prisma } from "../db";
 
-export const createPoll = (req: Request, res: Response) => {
-  const body = req.body;
-  
-  const newPoll: Poll = {
-    id: body.id || Date.now().toString(),
-    title: body.title,
-    category: body.category,
-    description: body.description,
-    imageUrl: body.imageUrl || "/logo.png",
-    dateCreated: body.dateCreated ? new Date(body.dateCreated) : new Date(),
-    interactionCount: body.interactionCount ?? 0,
-    ownerId: body.ownerId || "system-user",
-    listId: body.listId ?? null,
-    options: body.options.map((opt: any) => ({
-      id: opt.id || Math.random().toString(36).substring(7),
-      text: opt.text,
-      votes: opt.votes ?? 0,
-      userId: opt.userId
-    }))
-  };
+export const createPoll = async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    
+    const newPoll = await prisma.poll.create({
+      data: {
+        title: body.title,
+        category: body.category,
+        description: body.description,
+        imageUrl: body.imageUrl || "/logo.png",
+        interactionCount: body.interactionCount ?? 0,
+        ownerId: body.ownerId || "system-user",
+        options: {
+          create: body.options.map((opt: any) => ({
+            text: opt.text,
+            votes: opt.votes ?? 0
+          }))
+        }
+      },
+      include: { options: true }
+    });
 
-  pollsTable.push(newPoll);
-  res.status(201).json(newPoll);
+    res.status(201).json(newPoll);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create poll" });
+  }
 };
 
-export const getPolls = (req: Request, res: Response) => {
+export const getPolls = async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
-  
-  const startIndex = (page - 1) * limit;
-  const endIndex = page * limit;
-  
-  const paginatedPolls = pollsTable.slice(startIndex, endIndex);
+  const skip = (page - 1) * limit;
+
+  const [polls, totalItems] = await Promise.all([
+    prisma.poll.findMany({ skip, take: limit, include: { options: true } }),
+    prisma.poll.count()
+  ]);
 
   res.status(200).json({
-    data: paginatedPolls,
-    meta: {
-      totalItems: pollsTable.length,
-      currentPage: page,
-      totalPages: Math.ceil(pollsTable.length / limit),
-      itemsPerPage: limit
-    }
+    data: polls,
+    meta: { totalItems, currentPage: page, totalPages: Math.ceil(totalItems / limit), itemsPerPage: limit }
   });
 };
 
-export const getPollById = (req: Request, res: Response): void => {
-  const poll = pollsTable.find(p => p.id === req.params.id);
+export const getPollById = async (req: Request, res: Response): Promise<void> => {
+  const poll = await prisma.poll.findUnique({
+    where: { id: req.params.id as string},
+    include: { options: true }
+  });
+
   if (!poll) {
     res.status(404).json({ message: "Poll not found" });
     return;
   }
+  
   res.status(200).json(poll);
 };
 
-export const deletePoll = (req: Request, res: Response): void => {
-  const index = pollsTable.findIndex(p => p.id === req.params.id);
-  if (index === -1) {
+export const deletePoll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    await prisma.poll.delete({
+      where: { id: req.params.id as string}
+    });
+    res.status(204).send();
+  } catch (error) {
     res.status(404).json({ message: "Poll not found" });
-    return;
   }
-  
-  pollsTable.splice(index, 1);
-  res.status(204).send(); 
 };
 
-export const getPollStats = (_req: Request, res: Response) => {
-  const totalPolls = pollsTable.length;
-  const totalInteractions = pollsTable.reduce((sum, poll) => sum + poll.interactionCount, 0);
+export const getPollStats = async (_req: Request, res: Response) => {
+  const totalPolls = await prisma.poll.count();
+  const aggregate = await prisma.poll.aggregate({
+    _sum: { interactionCount: true }
+  });
   
-  let mostPopular = null;
-  if (totalPolls > 0) {
-    mostPopular = [...pollsTable].sort((a, b) => b.interactionCount - a.interactionCount)[0];
-  }
+  const mostPopular = await prisma.poll.findFirst({
+    orderBy: { interactionCount: 'desc' }
+  });
 
   res.status(200).json({
     totalPolls,
-    totalInteractions,
+    totalInteractions: aggregate._sum.interactionCount || 0,
     mostPopularPollId: mostPopular?.id || null
   });
 };
 
-export const updatePoll = (req: Request, res: Response): void => {
-  const index = pollsTable.findIndex(p => p.id === req.params.id);
-  
-  if (index === -1) {
+export const updatePoll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const updatedPoll = await prisma.poll.update({
+      where: { id: req.params.id as string},
+      data: req.body,
+      include: { options: true }
+    });
+    res.status(200).json(updatedPoll);
+  } catch (error) {
     res.status(404).json({ message: "Poll not found" });
-    return;
   }
-  
-  pollsTable[index] = { ...pollsTable[index], ...req.body };
-  
-  res.status(200).json(pollsTable[index]);
 };
 
-export const getPollsByUser = (req: Request, res: Response): void => {
+export const getPollsByUser = async (req: Request, res: Response): Promise<void> => {
   const userId = req.params.userId;
-  const userPolls = pollsTable.filter(p => p.ownerId === userId);
+  const userPolls = await prisma.poll.findMany({
+    where: { ownerId: userId as string},
+    include: { options: true }
+  });
   
   res.status(200).json(userPolls);
 };

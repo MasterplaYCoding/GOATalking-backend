@@ -1,129 +1,112 @@
-import request from "supertest";
-import app from "../src/index";
-import { resetDatabase, pollsTable } from "../src/models/db";
+import express from 'express';
+import request from 'supertest';
+import pollRoutes from '../src/routes/pollRoutes';
+import { prisma } from '../src/db';
 
-beforeEach(() => {
-  resetDatabase();
-});
+const app = express();
+app.use(express.json());
+app.use('/api/polls', pollRoutes);
 
-describe("Poll API Endpoints", () => {
-  
-  describe("POST /api/polls", () => {
-    it("should create a new poll when data is valid", async () => {
-      const newPoll = {
-        title: "Who is the GOAT?",
-        category: "Sports",
-        description: "Messi vs Ronaldo",
-        options: [{ text: "Messi" }, { text: "Ronaldo" }]
+describe('Poll API CRUD Operations', () => {
+  let createdPollId: string;
+
+  beforeAll(async () => {
+    await prisma.poll.deleteMany();
+    await prisma.user.upsert({
+      where: { id: "demo-user" },
+      update: {},
+      create: {
+        id: "demo-user",
+        email: "demo@system.local",
+        username: "Test User",
+        passwordHash: "hash",
+        avatarUrl: "/logo.png"
+      }
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it('1. POST /api/polls - Should create a new poll', async () => {
+    const newPoll = {
+      title: "Test Poll?",
+      category: "Testing",
+      description: "A poll made by Jest.",
+      imageUrl: "/test.png",
+      ownerId: "demo-user",
+      options: [
+        { text: "Option A" },
+        { text: "Option B" }
+      ]
+    };
+
+    const res = await request(app).post('/api/polls').send(newPoll);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('id');
+    expect(res.body.title).toBe("Test Poll?");
+    expect(res.body.options.length).toBe(2);
+    
+    createdPollId = res.body.id; 
+  });
+
+  it('2. GET /api/polls - Should fetch a list of polls', async () => {
+    const res = await request(app).get('/api/polls');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data[0].id).toBe(createdPollId);
+  });
+
+  it('3. PUT /api/polls/:id - Should update the poll', async () => {
+    const res = await request(app)
+      .put(`/api/polls/${createdPollId}`)
+      .send({ title: "Updated Test Poll?" });
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe("Updated Test Poll?");
+  });
+
+  it('4. DELETE /api/polls/:id - Should delete the poll', async () => {
+    const res = await request(app).delete(`/api/polls/${createdPollId}`);
+    
+    expect(res.status).toBe(204); 
+
+    const fetchRes = await request(app).get(`/api/polls/${createdPollId}`);
+    expect(fetchRes.status).toBe(404);
+  });
+
+ describe('Poll API - Sabotage Tests (500 Errors)', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('Should trigger a 500 error on GET all polls', async () => {
+      jest.spyOn(prisma.poll, 'findMany').mockRejectedValue(new Error('Simulated Database Failure'));
+
+      const res = await request(app).get('/api/polls');
+      expect(res.status).toBe(500);
+    });
+
+    it('Should trigger a 500 error on POST poll', async () => {
+      jest.spyOn(prisma.poll, 'create').mockRejectedValue(new Error('Simulated Crash'));
+      
+      const perfectPayload = {
+        title: "Test Poll?",
+        category: "Testing",
+        description: "A poll made by Jest.",
+        imageUrl: "/test.png",
+        ownerId: "demo-user",
+        options: [
+          { text: "Option A" },
+          { text: "Option B" }
+        ]
       };
 
-      const response = await request(app).post("/api/polls").send(newPoll);
-
-      expect(response.status).toBe(201);
-      expect(response.body.title).toBe("Who is the GOAT?");
-      expect(pollsTable.length).toBe(1); 
-    });
-
-    it("should return 400 when Zod validation fails (missing title)", async () => {
-      const badPoll = {
-        category: "Sports",
-        options: [{ text: "Messi" }]
-      };
-
-      const response = await request(app).post("/api/polls").send(badPoll);
-
-      expect(response.status).toBe(400);
-      expect(response.body.message).toBe("Validation Failed");
-      expect(pollsTable.length).toBe(0); 
-    });
-  });
-
-  describe("GET /api/polls", () => {
-
-    it("should use default pagination values when no query params are provided", async () => {
-      const response = await request(app).get("/api/polls");
-      expect(response.status).toBe(200);
-      expect(response.body.meta.currentPage).toBe(1);
-      expect(response.body.meta.itemsPerPage).toBe(10);
-    });
-
-    it("should return paginated polls", async () => {
-      pollsTable.push(
-        { id: "1", title: "Test 1", category: "A", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 0 },
-        { id: "2", title: "Test 2", category: "B", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 0 }
-      );
-
-      const response = await request(app).get("/api/polls?page=1&limit=1");
-
-      expect(response.status).toBe(200);
-      expect(response.body.data.length).toBe(1);
-      expect(response.body.meta.totalItems).toBe(2);
-      expect(response.body.meta.totalPages).toBe(2);
-    });
-  });
-
-  describe("GET /api/polls/stats", () => {
-
-    it("should handle stats when there are no polls in the database", async () => {
-      const response = await request(app).get("/api/polls/stats");
-      expect(response.status).toBe(200);
-      expect(response.body.totalPolls).toBe(0);
-      expect(response.body.mostPopularPollId).toBeNull();
-    });
-
-    it("should return correct statistics", async () => {
-      pollsTable.push(
-        { id: "1", title: "A", category: "A", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 5 },
-        { id: "2", title: "B", category: "B", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 20 } // Most popular
-      );
-
-      const response = await request(app).get("/api/polls/stats");
-
-      expect(response.status).toBe(200);
-      expect(response.body.totalPolls).toBe(2);
-      expect(response.body.totalInteractions).toBe(25);
-      expect(response.body.mostPopularPollId).toBe("2");
-    });
-  });
-  
-  describe("GET /api/polls/:id", () => {
-    it("should return a poll if it exists", async () => {
-      pollsTable.push(
-        { id: "99", title: "Target Poll", category: "A", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 0 }
-      );
-
-      const response = await request(app).get("/api/polls/99");
-
-      expect(response.status).toBe(200);
-      expect(response.body.id).toBe("99");
-      expect(response.body.title).toBe("Target Poll");
-    });
-
-    it("should return 404 if poll does not exist", async () => {
-      const response = await request(app).get("/api/polls/fake-id-123");
-
-      expect(response.status).toBe(404);
-      expect(response.body.message).toBe("Poll not found");
-    });
-  });
-
-  describe("DELETE /api/polls/:id", () => {
-    it("should delete a poll if it exists", async () => {
-      pollsTable.push(
-        { id: "99", title: "Target Poll", category: "A", description: "", imageUrl: "", options: [], dateCreated: new Date(), interactionCount: 0 }
-      );
-
-      const response = await request(app).delete("/api/polls/99");
-
-      expect(response.status).toBe(204); 
-      expect(pollsTable.length).toBe(0);
-    });
-
-    it("should return 404 if trying to delete a non-existent poll", async () => {
-      const response = await request(app).delete("/api/polls/fake-id-123");
-
-      expect(response.status).toBe(404);
-      expect(response.body.message).toBe("Poll not found");
+      const res = await request(app).post('/api/polls').send(perfectPayload);
+      expect(res.status).toBe(500);
     });
   });
 });

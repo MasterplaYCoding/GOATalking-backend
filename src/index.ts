@@ -9,6 +9,7 @@ import marginalityRoutes from "./routes/marginalityRoutes";
 import generatorRoutes from "./routes/generatorRoutes";
 import { initWebSocket } from "./socket";
 import { typeDefs, resolvers } from "./graphql";
+import { prisma } from './db';
 
 const app = express();
 const PORT = 3000;
@@ -28,6 +29,30 @@ app.use("/api/generator", generatorRoutes);
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "Server is running perfectly in RAM!" });
 });
+
+
+const ensureSystemUserExists = async () => {
+  try {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: "demo-user" }
+    });
+    
+    if (!existingUser) {
+      await prisma.user.create({
+        data: {
+          id: "demo-user",
+          email: "demo@system.local",
+          username: "System Generator",
+          passwordHash: "dummy-hash",
+          avatarUrl: "/logo.png"
+        }
+});
+      console.log("Seeded default 'demo-user' for the generator.");
+    }
+  } catch (error) {
+    console.error("Error seeding system user:", error);
+  }
+};
 
 const startServer = async () => {
   const apolloServer = new ApolloServer({
