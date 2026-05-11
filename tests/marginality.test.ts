@@ -111,6 +111,43 @@ describe('Marginality API CRUD Operations', () => {
     expect(res.body.userId).toBe(createdUserId);
   });
 
+  it('4.5 POST /api/marginality/responses - Should strictly UPDATE an existing response', async () => {
+    // 1. Submit the first time (Creates)
+    const initialPayload = {
+      testId: createdTestId,
+      userId: createdUserId,
+      categoryValues: { [realCategoryId]: 50 },
+      votes: [ { questionId: realQuestionId, agreement: 10 } ]
+    };
+    await request(app).post('/api/marginality/responses').send(initialPayload);
+
+    // 2. Submit the EXACT SAME user and test ID again (Updates)
+    const res = await request(app).post('/api/marginality/responses').send({
+      ...initialPayload,
+      categoryValues: { [realCategoryId]: 99 } // New value
+    });
+    
+    expect(res.status).toBe(201);
+  });
+
+  it('4.6 POST /api/marginality/responses - Should trigger the Speedrun Trap', async () => {
+    const speedrunPayload = {
+      testId: createdTestId,
+      userId: createdUserId,
+      categoryValues: { [realCategoryId]: 50 },
+      votes: [ { questionId: realQuestionId, agreement: 10 } ],
+      startedAt: Date.now() - 5000 // 5 seconds ago! (Triggers the <60s trap)
+    };
+    
+    // First submission creates the Observation List record
+    await request(app).post('/api/marginality/responses').send(speedrunPayload);
+
+    // Second submission triggers the "append to existing record" branch
+    const res = await request(app).post('/api/marginality/responses').send(speedrunPayload);
+    
+    expect(res.status).toBe(201);
+  });
+
   it('5. GET /api/marginality/responses - Should fetch all responses', async () => {
     const res = await request(app).get('/api/marginality/responses');
 
@@ -131,7 +168,24 @@ describe('Marginality API CRUD Operations', () => {
     expect(fetchRes.status).toBe(404);
   });
 
+  it('GET /api/marginality/:id - Should return 404 for non-existent test', async () => {
+      const res = await request(app).get('/api/marginality/fake-test-id-123');
+      expect(res.status).toBe(404);
+  });
+
+  it('DELETE /api/marginality/:id - Should return 404 for non-existent test', async () => {
+    const res = await request(app).delete('/api/marginality/fake-test-id-123');
+    expect(res.status).toBe(404);
+  });
+
   describe('Marginality API - Sabotage Tests (500 Errors)', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
     afterEach(() => {
       jest.restoreAllMocks();
     });
@@ -154,6 +208,21 @@ describe('Marginality API CRUD Operations', () => {
       jest.spyOn(prisma.marginalityTestResponse, 'findMany').mockRejectedValue(new Error('Simulated DB Crash'));
 
       const res = await request(app).get('/api/marginality/responses');
+      expect(res.status).toBe(500);
+    });
+
+    it('Should trigger a 500 error on POST test creation', async () => {
+      jest.spyOn(prisma.marginalityTest, 'create').mockRejectedValue(new Error('Simulated Creation Crash'));
+      
+      const payload = {
+        title: "Crash Test",
+        topic: "Testing",
+        description: "Will fail",
+        categoryDefinitions: [ { key: "c1", label: "C1", inputType: "text" } ],
+        questions: [ { id: "q1", text: "Question 1" } ] // <--- 5+ characters!
+      };
+
+      const res = await request(app).post('/api/marginality').send(payload);
       expect(res.status).toBe(500);
     });
   });

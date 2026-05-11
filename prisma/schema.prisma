@@ -8,17 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
+  id           String                    @id @default(uuid())
   username     String
   avatarUrl    String
-  email        String   @unique
+  email        String                    @unique
   passwordHash String
+  
   roleId       String?
   role         Role?                     @relation(fields: [roleId], references: [id])
+  
   pollLists    PollList[]
   polls        Poll[]
   responses    MarginalityTestResponse[]
   pollVotes    PollVote[]
+  
+  logs            LogEntry[]
+  observationList ObservationList?
 }
 
 model Role {
@@ -171,4 +176,23 @@ model QuestionAgreementVote {
   
   questionId String
   question   MarginalityQuestion     @relation(fields: [questionId], references: [id])
+}
+
+model LogEntry {
+  id                String   @id @default(uuid())
+  userId            String
+  groupId           String
+  actionInformation String
+  timestamp         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ObservationList {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  reason     String
+  detectedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

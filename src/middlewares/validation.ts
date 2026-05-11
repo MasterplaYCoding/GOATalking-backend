@@ -72,7 +72,8 @@ export const submitResponseSchema = z.object({
   votes: z.array(
     z.object({
       questionId: z.string().min(1),
-      agreement: z.number().min(1).max(5)
+      agreement: z.number().min(0).max(100) 
     })
-  ).min(1)
+  ).min(1),
+  startedAt: z.number().optional() 
 });

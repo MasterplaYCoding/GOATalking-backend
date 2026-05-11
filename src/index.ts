@@ -11,6 +11,7 @@ import generatorRoutes from "./routes/generatorRoutes";
 import { initWebSocket } from "./socket";
 import { typeDefs, resolvers } from "./graphql";
 import { prisma } from './db';
+import { actionLoggerAndDetector } from "./middlewares/loggerMiddleware";
 
 const app = express();
 const PORT = 3000;
@@ -21,6 +22,8 @@ initWebSocket(server);
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api", actionLoggerAndDetector);
 
 app.use("/api/polls", pollRoutes);
 app.use("/api/users", userRoutes);

@@ -81,3 +81,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: "Login failed" });
   }
 };
+
+export const getObservationList = async (req: Request, res: Response) => {
+  try {
+    const list = await prisma.observationList.findMany({
+      include: {
+        user: { select: { username: true, email: true } }
+      },
+      orderBy: { detectedAt: 'desc' }
+    });
+    res.status(200).json(list);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch observation list" });
+  }
+};

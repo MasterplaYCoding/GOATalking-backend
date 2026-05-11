@@ -99,14 +99,38 @@ export const deleteTest = async (req: Request, res: Response): Promise<void> => 
 
 export const submitResponse = async (req: Request, res: Response) => {
   try {
-    const { testId, userId, categoryValues, votes } = req.body;
+    const { testId, userId, categoryValues, votes, startedAt } = req.body;
+
+    if (startedAt) {
+      const duration = (Date.now() - new Date(startedAt).getTime()) / 1000;
+      if (duration < 60) {
+        const newReason = "Test Speedrun (<60s)";
+        const existingRecord = await prisma.observationList.findUnique({ where: { userId } });
+
+        let finalReason = newReason;
+        if (existingRecord) {
+          finalReason = existingRecord.reason.includes(newReason)
+            ? existingRecord.reason
+            : `${existingRecord.reason} | ${newReason}`;
+        }
+
+        await prisma.observationList.upsert({
+          where: { userId },
+          update: { reason: finalReason, detectedAt: new Date() },
+          create: { userId, reason: finalReason }
+        });
+        console.log(`🚨 SUSPICIOUS BEHAVIOR DETECTED: User ${userId} flagged for Test Speedrun (<60s).`);
+      }
+    }
 
     const existingResponse = await prisma.marginalityTestResponse.findFirst({
-      where: { 
-        testId: testId,
-        userId: userId 
-      }
+      where: { testId: testId, userId: userId }
     });
+
+    const formattedCategoryValues = Object.entries(categoryValues).map(([key, val]) => ({
+      definitionId: key, 
+      value: String(val)
+    }));
 
     let response;
 
@@ -114,42 +138,26 @@ export const submitResponse = async (req: Request, res: Response) => {
       response = await prisma.marginalityTestResponse.update({
         where: { id: existingResponse.id },
         data: {
-          categoryValues: { deleteMany: {}, create: categoryValues },
-          votes: { deleteMany: {}, create: votes }
+          categoryValues: { deleteMany: {}, createMany: { data: formattedCategoryValues } },
+          votes: { deleteMany: {}, createMany: { data: votes } }
         },
         include: { categoryValues: true, votes: true }
       });
     } else {
-      const formattedCategoryValues = Object.entries(req.body.categoryValues).map(([key, val]) => ({
-        definitionId: key, 
-        value: String(val)
-      }));
-
       response = await prisma.marginalityTestResponse.create({
         data: {
-          testId: req.body.testId,
-          userId: req.body.userId,
-          categoryValues: {
-            createMany: {
-              data: formattedCategoryValues
-            }
-          },
-          votes: {
-            createMany: {
-              data: req.body.votes
-            }
-          }
+          testId: testId,
+          userId: userId,
+          categoryValues: { createMany: { data: formattedCategoryValues } },
+          votes: { createMany: { data: votes } }
         },
-        include: {
-          categoryValues: true,
-          votes: true
-        }
+        include: { categoryValues: true, votes: true }
       });
     }
 
     res.status(201).json(response);
   } catch (error) {
-    console.error(error);
+    console.error("Submit Response Error:", error); 
     res.status(500).json({ error: "Failed to submit response" });
   }
 };
