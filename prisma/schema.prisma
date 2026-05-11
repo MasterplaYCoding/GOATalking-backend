@@ -13,11 +13,25 @@ model User {
   avatarUrl    String
   email        String   @unique
   passwordHash String
-
+  roleId       String?
+  role         Role?                     @relation(fields: [roleId], references: [id])
   pollLists    PollList[]
   polls        Poll[]
   responses    MarginalityTestResponse[]
   pollVotes    PollVote[]
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  permissions Permission[]
+  users       User[]
+}
+
+model Permission {
+  id    String @id @default(uuid())
+  name  String @unique
+  roles Role[]
 }
 
 model PollList {

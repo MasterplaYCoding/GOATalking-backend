@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { usersTable } from "../models/db";
 import { User } from "../models/user";
+import { prisma } from "../db";
 
 export const createUser = (req: Request, res: Response) => {
   const newUser: User = {
@@ -59,4 +60,24 @@ export const getUserStats = (_req: Request, res: Response) => {
   res.status(200).json({
     totalUsers: usersTable.length
   });
+};
+
+export const loginUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { role: { include: { permissions: true } } } 
+    });
+
+    if (!user || user.passwordHash !== password) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Login failed" });
+  }
 };

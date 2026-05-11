@@ -6,7 +6,8 @@ import {
   deletePoll, 
   getPollStats,
   updatePoll,
-  getPollsByUser
+  getPollsByUser,
+  voteOnPoll
 } from "../controllers/pollController";
 import { validateRequest, createPollSchema } from "../middlewares/validation";
 
@@ -20,5 +21,6 @@ router.get("/", getPolls);
 router.get("/:id", getPollById);
 router.put("/:id", updatePoll);
 router.delete("/:id", deletePoll);
+router.post("/vote", voteOnPoll);
 
 export default router;

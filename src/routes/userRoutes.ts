@@ -4,7 +4,8 @@ import {
   getUsers, 
   getUserById, 
   deleteUser, 
-  getUserStats 
+  getUserStats,
+  loginUser
 } from "../controllers/userController";
 import { validateRequest, createUserSchema } from "../middlewares/validation";
 
@@ -15,5 +16,6 @@ router.post("/", validateRequest(createUserSchema), createUser);
 router.get("/", getUsers);
 router.get("/:id", getUserById);
 router.delete("/:id", deleteUser);
+router.post("/login", loginUser);
 
 export default router;

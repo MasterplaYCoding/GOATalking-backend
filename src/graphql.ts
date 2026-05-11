@@ -55,7 +55,7 @@ export const typeDefs = `#graphql
     createPoll(title: String!, category: String!, description: String!, imageUrl: String, options: [OptionInput!]!): Poll!
     updatePoll(id: ID!, interactionCount: Int, options: [OptionInput]): Poll
     deletePoll(id: ID!): Boolean
-    votePoll(pollId: ID!, optionId: ID!): Poll!
+    votePoll(pollId: ID!, optionId: ID!, userId: ID!): Poll!
     createPollList(name: String!, description: String!, ownerId: String!): PollList!
     updatePollList(id: ID!, name: String, description: String): PollList
     deletePollList(id: ID!): Boolean
@@ -199,19 +199,36 @@ export const resolvers = {
       }
     },
     
-    votePoll: async (_: any, { pollId, optionId }: { pollId: string; optionId: string }) => {
-      await prisma.pollOption.update({
-        where: { id: optionId },
-        data: { votes: { increment: 1 } }
+    votePoll: async (_: any, { pollId, optionId, userId }: { pollId: string; optionId: string; userId: string }) => {
+      const existingVote = await prisma.pollVote.findUnique({
+        where: { userId_pollId: { userId, pollId } }
       });
 
-      const updatedPoll = await prisma.poll.update({
-        where: { id: pollId },
-        data: { interactionCount: { increment: 1 } },
-        include: { options: true }
+      if (existingVote) {
+        if (existingVote.optionId === optionId) {
+          const poll = await prisma.poll.findUnique({ where: { id: pollId }, include: { options: true } });
+          return { ...poll, dateCreated: poll?.dateCreated.toISOString(), ownerId: poll?.ownerId || "" };
+        }
+
+        await prisma.pollOption.update({ where: { id: existingVote.optionId }, data: { votes: { decrement: 1 } } });
+        await prisma.pollOption.update({ where: { id: optionId }, data: { votes: { increment: 1 } } });
+
+        await prisma.pollVote.update({
+          where: { id: existingVote.id },
+          data: { optionId }
+        });
+      } else {
+        await prisma.pollOption.update({ where: { id: optionId }, data: { votes: { increment: 1 } } });
+        await prisma.pollVote.create({ data: { userId, pollId, optionId } });
+        await prisma.poll.update({ where: { id: pollId }, data: { interactionCount: { increment: 1 } } });
+      }
+
+      const updatedPoll = await prisma.poll.findUnique({ 
+        where: { id: pollId }, 
+        include: { options: true } 
       });
 
-      return { ...updatedPoll, dateCreated: updatedPoll.dateCreated.toISOString(), ownerId: updatedPoll.ownerId || "" };
+      return { ...updatedPoll, dateCreated: updatedPoll?.dateCreated.toISOString(), ownerId: updatedPoll?.ownerId || "" };
     },
     
     createPollList: async (_: any, args: { name: string; description: string; ownerId: string }) => {

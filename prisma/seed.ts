@@ -1,24 +1,57 @@
 import { prisma } from '../src/db';
 
 async function main() {
-  console.log('🌱 Starting full database seed...');
+  console.log('Starting full database seed...');
 
-  // 1. Seed Users
+  console.log('Seeding Roles and Permissions...');
+  
+  const adminRole = await prisma.role.upsert({
+    where: { name: "Admin" },
+    update: {},
+    create: { name: "Admin" }
+  });
+
+  const userRole = await prisma.role.upsert({
+    where: { name: "User" },
+    update: {},
+    create: { name: "User" }
+  });
+
+  await prisma.permission.upsert({
+    where: { name: "FULL_ACCESS" },
+    update: { roles: { connect: { id: adminRole.id } } },
+    create: { name: "FULL_ACCESS", roles: { connect: { id: adminRole.id } } }
+  });
+
+  await prisma.permission.upsert({
+    where: { name: "RESTRICTED_ACCESS" },
+    update: { roles: { connect: { id: userRole.id } } },
+    create: { name: "RESTRICTED_ACCESS", roles: { connect: { id: userRole.id } } }
+  });
+
   const users = [
-    { id: "demo-user", username: "demo-user", email: "demo@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" },
-    { id: "other-user", username: "other-user", email: "other@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" },
-    { id: "user-spain-1", username: "user-spain-1", email: "spain@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" },
-    { id: "user-england-1", username: "user-england-1", email: "england@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" },
-    { id: "user-germany-1", username: "user-germany-1", email: "germany@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" },
-    { id: "user-argentina-1", username: "user-argentina-1", email: "argentina@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "" }
+    { id: "demo-user", username: "demo-user", email: "demo@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: adminRole.id },
+    { id: "other-user", username: "other-user", email: "other@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
+    { id: "user-spain-1", username: "user-spain-1", email: "spain@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
+    { id: "user-england-1", username: "user-england-1", email: "england@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
+    { id: "user-germany-1", username: "user-germany-1", email: "germany@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
+    { id: "user-argentina-1", username: "user-argentina-1", email: "argentina@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id }
   ];
 
   for (const u of users) {
-    await prisma.user.upsert({ where: { id: u.id }, update: {}, create: u });
+    await prisma.user.upsert({ 
+      where: { id: u.id }, 
+      update: { 
+        email: u.email, 
+        passwordHash: u.passwordHash, 
+        username: u.username,
+        roleId: u.roleId 
+      }, 
+      create: u 
+    });
   }
-  console.log('✅ 6 Users seeded');
+  console.log('Roles, Permissions, and 6 Users seeded');
 
-  // 2. Seed All 10 Polls (WITH INTERACTION COUNT FIX)
   const polls = [
     {
       id: "poll-1", title: "Who is the greatest football player of all time?", category: "Sports", description: "Use this page to shape the final poll details view and interactions.", imageUrl: "https://www.livemint.com/lm-img/img/2025/06/20/optimize/lionel_messi_Cristiano_ronaldo_1750427785706_1750427788080.jpg", ownerId: "other-user",

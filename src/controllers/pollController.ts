@@ -109,3 +109,43 @@ export const getPollsByUser = async (req: Request, res: Response): Promise<void>
   
   res.status(200).json(userPolls);
 };
+
+
+export const voteOnPoll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { pollId, optionId, userId } = req.body;
+
+    const existingVote = await prisma.pollVote.findUnique({
+      where: { userId_pollId: { userId, pollId } }
+    });
+
+    if (existingVote) {
+      if (existingVote.optionId === optionId) {
+        res.status(200).send();
+        return;
+      }
+
+      await prisma.pollOption.update({ where: { id: existingVote.optionId }, data: { votes: { decrement: 1 } } });
+      await prisma.pollOption.update({ where: { id: optionId }, data: { votes: { increment: 1 } } });
+
+      await prisma.pollVote.update({
+        where: { id: existingVote.id },
+        data: { optionId }
+      });
+    } else {
+      await prisma.pollOption.update({ where: { id: optionId }, data: { votes: { increment: 1 } } });
+      await prisma.pollVote.create({ data: { userId, pollId, optionId } });
+      await prisma.poll.update({ where: { id: pollId }, data: { interactionCount: { increment: 1 } } });
+    }
+
+    const updatedPoll = await prisma.poll.findUnique({ 
+      where: { id: pollId }, 
+      include: { options: true } 
+    });
+    
+    res.status(200).json(updatedPoll);
+  } catch (error) {
+    console.error("Vote failed:", error);
+    res.status(500).json({ error: "Failed to process vote" });
+  }
+};

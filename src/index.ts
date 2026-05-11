@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import http from "http";
+import mongoose from "mongoose";
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import pollRoutes from "./routes/pollRoutes";
@@ -30,7 +31,6 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "Server is running perfectly in RAM!" });
 });
 
-
 const ensureSystemUserExists = async () => {
   try {
     const existingUser = await prisma.user.findUnique({
@@ -46,7 +46,7 @@ const ensureSystemUserExists = async () => {
           passwordHash: "dummy-hash",
           avatarUrl: "/logo.png"
         }
-});
+      });
       console.log("Seeded default 'demo-user' for the generator.");
     }
   } catch (error) {
@@ -55,6 +55,13 @@ const ensureSystemUserExists = async () => {
 };
 
 const startServer = async () => {
+  try {
+    await mongoose.connect("mongodb+srv://matei_user:dbUserPassword@cluster0.cu5czfm.mongodb.net/?appName=Cluster0");
+    console.log("Connected to NoSQL MongoDB for Chat");
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
+  }
+
   const apolloServer = new ApolloServer({
     typeDefs,
     resolvers,
@@ -69,6 +76,8 @@ const startServer = async () => {
     (req, res, next) => { req.body = req.body || {}; next(); },
     expressMiddleware(apolloServer)
   );
+
+  // await ensureSystemUserExists();
 
   if (process.env.NODE_ENV !== "test") {
     server.listen(PORT, () => {
