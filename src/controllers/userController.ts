@@ -3,46 +3,76 @@ import { usersTable } from "../models/db";
 import { User } from "../models/user";
 import { prisma } from "../db";
 
-export const createUser = (req: Request, res: Response) => {
-  const newUser: User = {
-    id: Date.now().toString(),
-    username: req.body.username,
-    email: req.body.email,
-    avatarUrl: req.body.avatarUrl || "",
-    passwordHash: req.body.passwordHash
-  };
+export const createUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { username, email, passwordHash, avatarUrl } = req.body;
 
-  usersTable.push(newUser);
-  res.status(201).json(newUser);
-};
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
 
-export const getUsers = (req: Request, res: Response) => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
-  
-  const startIndex = (page - 1) * limit;
-  const endIndex = page * limit;
-  
-  const paginatedUsers = usersTable.slice(startIndex, endIndex);
-
-  res.status(200).json({
-    data: paginatedUsers,
-    meta: {
-      totalItems: usersTable.length,
-      currentPage: page,
-      totalPages: Math.ceil(usersTable.length / limit),
-      itemsPerPage: limit
+    if (existingUser) {
+      res.status(400).json({ error: "Email is already registered" });
+      return;
     }
-  });
+
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        passwordHash,
+        avatarUrl: avatarUrl || "/logo.png"
+      }
+    });
+
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create user" });
+  }
 };
 
-export const getUserById = (req: Request, res: Response): void => {
-  const user = usersTable.find(u => u.id === req.params.id);
-  if (!user) {
-    res.status(404).json({ message: "User not found" });
-    return;
+export const getUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const users = await prisma.user.findMany({
+      skip,
+      take: limit,
+    });
+
+    const totalItems = await prisma.user.count();
+
+    res.status(200).json({
+      data: users,
+      meta: {
+        totalItems,
+        currentPage: page,
+        totalPages: Math.ceil(totalItems / limit),
+        itemsPerPage: limit
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
   }
-  res.status(200).json(user);
+};
+
+export const getUserById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id as string }
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
 };
 
 export const deleteUser = (req: Request, res: Response): void => {

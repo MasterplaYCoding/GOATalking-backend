@@ -12,6 +12,7 @@ import { initWebSocket } from "./socket";
 import { typeDefs, resolvers } from "./graphql";
 import { prisma } from './db';
 import { actionLoggerAndDetector } from "./middlewares/loggerMiddleware";
+import "dotenv/config";
 
 const app = express();
 const PORT = 3000;
@@ -59,7 +60,7 @@ const ensureSystemUserExists = async () => {
 
 const startServer = async () => {
   try {
-    await mongoose.connect("mongodb+srv://matei_user:dbUserPassword@cluster0.cu5czfm.mongodb.net/?appName=Cluster0");
+    await mongoose.connect(process.env.MONGODB_URI as string);
     console.log("Connected to NoSQL MongoDB for Chat");
   } catch (error) {
     console.error("MongoDB connection error:", error);
