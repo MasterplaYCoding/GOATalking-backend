@@ -1,9 +1,12 @@
 import { Request, Response } from "express";
 import { prisma } from "../db";
+import { AuthRequest } from "../middlewares/authMiddleware";
 
-export const createPoll = async (req: Request, res: Response) => {
+export const createPoll = async (req: AuthRequest, res: Response) => {
   try {
     const body = req.body;
+    
+    const authenticatedUserId = req.user?.userId || body.ownerId || "system-user"; 
     
     const newPoll = await prisma.poll.create({
       data: {
@@ -12,7 +15,7 @@ export const createPoll = async (req: Request, res: Response) => {
         description: body.description,
         imageUrl: body.imageUrl || "/logo.png",
         interactionCount: body.interactionCount ?? 0,
-        ownerId: body.ownerId || "system-user",
+        ownerId: authenticatedUserId,
         options: {
           create: body.options.map((opt: any) => ({
             text: opt.text,

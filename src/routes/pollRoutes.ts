@@ -10,17 +10,18 @@ import {
   voteOnPoll
 } from "../controllers/pollController";
 import { validateRequest, createPollSchema } from "../middlewares/validation";
+import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router = Router();
 
 router.get("/stats", getPollStats);
 router.get("/user/:userId", getPollsByUser);
-
-router.post("/", validateRequest(createPollSchema), createPoll);
 router.get("/", getPolls);
 router.get("/:id", getPollById);
-router.put("/:id", updatePoll);
-router.delete("/:id", deletePoll);
-router.post("/vote", voteOnPoll);
+
+router.post("/", authMiddleware, validateRequest(createPollSchema), createPoll);
+router.put("/:id", authMiddleware, updatePoll);
+router.delete("/:id", authMiddleware, deletePoll);
+router.post("/vote", authMiddleware, voteOnPoll);
 
 export default router;

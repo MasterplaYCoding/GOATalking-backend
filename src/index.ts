@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import http from "http";
+import https from "https";
 import mongoose from "mongoose";
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
@@ -13,13 +13,11 @@ import { typeDefs, resolvers } from "./graphql";
 import { prisma } from './db';
 import { actionLoggerAndDetector } from "./middlewares/loggerMiddleware";
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 const PORT = 3000;
-
-const server = http.createServer(app);
-
-initWebSocket(server);
 
 app.use(cors());
 app.use(express.json());
@@ -51,19 +49,17 @@ const ensureSystemUserExists = async () => {
           avatarUrl: "/logo.png"
         }
       });
-      console.log("Seeded default 'demo-user' for the generator.");
     }
   } catch (error) {
-    console.error("Error seeding system user:", error);
+    console.error(error);
   }
 };
 
 const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI as string);
-    console.log("Connected to NoSQL MongoDB for Chat");
   } catch (error) {
-    console.error("MongoDB connection error:", error);
+    console.error(error);
   }
 
   const apolloServer = new ApolloServer({
@@ -73,7 +69,7 @@ const startServer = async () => {
 
   await apolloServer.start();
 
-  app.use(
+app.use(
     '/graphql',
     cors(),
     express.json(),
@@ -81,12 +77,20 @@ const startServer = async () => {
     expressMiddleware(apolloServer)
   );
 
-  // await ensureSystemUserExists();
+  const keyPath = path.join(process.cwd(), 'localhost+1-key.pem');
+  const certPath = path.join(process.cwd(), 'localhost+1.pem');
+
+  const server = https.createServer({ 
+    key: fs.readFileSync(keyPath), 
+    cert: fs.readFileSync(certPath) 
+  }, app);
+
+  initWebSocket(server);
 
   if (process.env.NODE_ENV !== "test") {
-    server.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-      console.log(`GraphQL Sandbox is at http://localhost:${PORT}/graphql`);
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server is running on https://localhost:${PORT}`);
+      console.log(`GraphQL Sandbox is at https://localhost:${PORT}/graphql`);
     });
   }
 };
