@@ -1,4 +1,7 @@
 import { prisma } from '../src/db';
+import dotenv from 'dotenv';
+
+dotenv.config();  
 
 async function main() {
   console.log('Starting full database seed...');
@@ -17,6 +20,16 @@ async function main() {
     create: { name: "User" }
   });
 
+  const baseEmail = process.env.SEED_BASE_EMAIL || "fallback@gmail.com";
+  const [name, domain] = baseEmail.split('@');
+
+  const adminEmail = `${name}+admin@${domain}`;
+  const user1Email = `${name}+user1@${domain}`;
+  const user2Email = `${name}+user2@${domain}`;
+  const user3Email = `${name}+user3@${domain}`;
+  const user4Email = `${name}+user4@${domain}`;
+  const user5Email = `${name}+user5@${domain}`;
+
   await prisma.permission.upsert({
     where: { name: "FULL_ACCESS" },
     update: { roles: { connect: { id: adminRole.id } } },
@@ -30,12 +43,12 @@ async function main() {
   });
 
   const users = [
-    { id: "demo-user", username: "demo-user", email: "demo@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: adminRole.id },
-    { id: "other-user", username: "other-user", email: "other@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
-    { id: "user-spain-1", username: "user-spain-1", email: "spain@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
-    { id: "user-england-1", username: "user-england-1", email: "england@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
-    { id: "user-germany-1", username: "user-germany-1", email: "germany@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id },
-    { id: "user-argentina-1", username: "user-argentina-1", email: "argentina@goatalking.com", passwordHash: "local-demo-password", avatarUrl: "", roleId: userRole.id }
+    { id: "demo-user", username: "demo-user", email: adminEmail, passwordHash: "parola", avatarUrl: "", roleId: adminRole.id },
+    { id: "other-user", username: "other-user", email: user1Email, passwordHash: "parola", avatarUrl: "", roleId: userRole.id },
+    { id: "user-spain-1", username: "user-spain-1", email: user2Email, passwordHash: "parola", avatarUrl: "", roleId: userRole.id },
+    { id: "user-england-1", username: "user-england-1", email: user3Email, passwordHash: "parola", avatarUrl: "", roleId: userRole.id },
+    { id: "user-germany-1", username: "user-germany-1", email: user4Email, passwordHash: "parola", avatarUrl: "", roleId: userRole.id },
+    { id: "user-argentina-1", username: "user-argentina-1", email: user5Email, passwordHash: "parola", avatarUrl: "", roleId: userRole.id }
   ];
 
   for (const u of users) {

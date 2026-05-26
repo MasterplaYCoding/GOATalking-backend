@@ -9,7 +9,6 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.error("⛔ Auth Failed: No Bearer token provided");
     res.status(401).json({ error: "Missing or invalid Authorization header" });
     return;
   }

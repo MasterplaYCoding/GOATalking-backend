@@ -24,6 +24,11 @@ model User {
   
   logs            LogEntry[]
   observationList ObservationList?
+
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  twoFactorCode    String?
+  twoFactorExpiry  DateTime?
 }
 
 model Role {
