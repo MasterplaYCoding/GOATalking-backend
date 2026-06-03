@@ -1,7 +1,11 @@
-import { prisma } from '../src/db';
+import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 
-dotenv.config();  
+dotenv.config();
+
+// We instantiate a local prisma client here just for the seed script 
+// to avoid any import path issues with src/db.ts
+const prisma = new PrismaClient();
 
 async function main() {
   console.log('Starting full database seed...');
@@ -63,7 +67,7 @@ async function main() {
       create: u 
     });
   }
-  console.log('Roles, Permissions, and 6 Users seeded');
+  console.log('✅ Roles, Permissions, and 6 Users seeded');
 
   const polls = [
     {
@@ -74,7 +78,6 @@ async function main() {
       id: "poll-4", title: "What is the ultimate fast food burger?", category: "Food", description: "The debate that tears friendships apart. Vote for your favorite tier-1 burger.", imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000", ownerId: "other-user",
       options: [ { text: "Five Guys", votes: 420 }, { text: "In-N-Out", votes: 150 }, { text: "Shake Shack", votes: 100 }, { text: "McDonald's Quarter Pounder", votes: 50 }, { text: "Burger King Whopper", votes: 30 } ]
     },
-    // Adding the rest of your original polls here...
     {
       id: "poll-2", title: "What is the best programming language for beginners?", category: "Technology", description: "Cast your vote on the best language to start a software engineering journey.", imageUrl: "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&q=80&w=1000", ownerId: "other-user",
       options: [ { text: "Python", votes: 55 }, { text: "JavaScript", votes: 30 }, { text: "TypeScript", votes: 20 }, { text: "Java", votes: 10 }, { text: "C++", votes: 3 }, { text: "Ruby", votes: 2 } ]
@@ -110,7 +113,6 @@ async function main() {
   ];
 
   for (const p of polls) {
-    // FIX: Automatically calculate interactionCount by summing the votes
     const totalVotes = p.options.reduce((sum, opt) => sum + opt.votes, 0);
 
     await prisma.pollOption.deleteMany({ where: { pollId: p.id } });
@@ -127,7 +129,6 @@ async function main() {
   }
   console.log('✅ 10 Polls seeded');
 
-  // 3. Seed Marginality Test (WITH INCLUDE FLAGS FIX)
   const mTestId = "football-tribalism-and-legacy";
   await prisma.marginalityTestResponse.deleteMany({ where: { testId: mTestId } });
   await prisma.marginalityTest.deleteMany({ where: { id: mTestId } });
@@ -140,7 +141,6 @@ async function main() {
       description: "Measure how your football opinions compare with supporters from different age groups, countries, and viewing habits.",
       categoryDefs: {
         create: [
-          // FIX: Added includeInQuestionStats and includeInReport to true so your UI renders them!
           { id: "age", key: "age", label: "Age", inputType: "number", includeInQuestionStats: true, includeInReport: true },
           { 
             id: "ageGroup", key: "ageGroup", label: "Generation", inputType: "select",
@@ -170,7 +170,6 @@ async function main() {
   });
   console.log('✅ Marginality Test seeded');
 
-  // 4. Seed all 5 Responses
   const responses = [
     {
       userId: "demo-user",

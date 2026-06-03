@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { prisma } from "../db";
 
 async function askLocalLLM(username: string, actionLogs: string[]): Promise<boolean> {
+  return false; // Placeholder for actual LLM integration
   const prompt = `You are a strict cybersecurity AI. Analyze this user's recent actions.
 User: ${username}
 Recent Actions: 
@@ -33,6 +34,7 @@ Reply ONLY with the exact word YES or NO.`;
 }
 
 export const actionLoggerAndDetector = async (req: Request, res: Response, next: NextFunction) => {
+  console.log(`[MIDDLEWARE] Caught request to: ${req.url}`);
   next();
 
   try {
@@ -71,8 +73,8 @@ export const actionLoggerAndDetector = async (req: Request, res: Response, next:
     if (recentLogs.length > 8) {
       console.log(`🚨 Tripwire crossed by ${user.username}. Waking up AI...`);
       
-      const logStrings = recentLogs.map(l => l.actionInformation);
-      
+      const logStrings = recentLogs.map((l: any) => l.actionInformation);
+
       const isMalicious = await askLocalLLM(user.username, logStrings);
 
       if (isMalicious) {

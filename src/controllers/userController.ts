@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { usersTable } from "../models/db";
 import { prisma } from "../db";
 import { sendSecurityEmail } from "../services/emailService";
 import jwt from "jsonwebtoken";
@@ -209,15 +208,24 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const deleteUser = (req: Request, res: Response): void => {
-  const index = usersTable.findIndex(u => u.id === req.params.id);
-  if (index === -1) { res.status(404).json({ message: "User not found" }); return; }
-  usersTable.splice(index, 1);
-  res.status(204).send();
+export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    await prisma.user.delete({
+      where: { id: req.params.id }
+    });
+    res.status(204).send();
+  } catch (error) {
+    res.status(404).json({ message: "User not found or failed to delete" });
+  }
 };
 
-export const getUserStats = (_req: Request, res: Response) => {
-  res.status(200).json({ totalUsers: usersTable.length });
+export const getUserStats = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const totalUsers = await prisma.user.count();
+    res.status(200).json({ totalUsers });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch user stats" });
+  }
 };
 
 export const getObservationList = async (req: Request, res: Response) => {

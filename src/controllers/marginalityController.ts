@@ -40,8 +40,8 @@ export const getTests = async (req: Request, res: Response) => {
       prisma.marginalityTest.count()
     ]);
 
-    const parsedTests = tests.map(t => {
-      const parsedDefs = t.categoryDefs.map(def => ({
+    const parsedTests = tests.map((t: any) => {
+      const parsedDefs = t.categoryDefs.map((def: any) => ({
         ...def,
         options: def.options ? JSON.parse(def.options) : undefined
       }));
@@ -75,7 +75,7 @@ export const getTestById = async (req: Request, res: Response): Promise<void> =>
       return;
     }
     
-    const parsedDefs = test.categoryDefs.map(def => ({
+    const parsedDefs = test.categoryDefs.map((def: any) => ({
       ...def,
       options: def.options ? JSON.parse(def.options) : undefined
     }));
@@ -168,12 +168,10 @@ export const getResponses = async (_req: Request, res: Response) => {
       include: { categoryValues: true, votes: true }
     });
 
-    // Transform Prisma's array back into the dictionary object the frontend expects
-    const formattedResponses = responses.map(response => {
+    const formattedResponses = responses.map((response: any) => {
       const categoryDict: Record<string, string | number> = {};
       
-      response.categoryValues.forEach(cv => {
-        // Convert numeric strings back to numbers for age calculations
+      response.categoryValues.forEach((cv: any) => {
         categoryDict[cv.definitionId] = isNaN(Number(cv.value)) ? cv.value : Number(cv.value);
       });
 

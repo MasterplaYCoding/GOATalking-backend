@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import https from "https";
+import http from "http";
 import mongoose from "mongoose";
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
@@ -17,7 +18,7 @@ import fs from "fs";
 import path from "path";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -69,7 +70,7 @@ const startServer = async () => {
 
   await apolloServer.start();
 
-app.use(
+  app.use(
     '/graphql',
     cors(),
     express.json(),
@@ -77,20 +78,26 @@ app.use(
     expressMiddleware(apolloServer)
   );
 
-  const keyPath = path.join(process.cwd(), 'localhost+1-key.pem');
-  const certPath = path.join(process.cwd(), 'localhost+1.pem');
+  let server;
 
-  const server = https.createServer({ 
-    key: fs.readFileSync(keyPath), 
-    cert: fs.readFileSync(certPath) 
-  }, app);
+  if (process.env.NODE_ENV === "production") {
+    server = http.createServer(app);
+  } else {
+    const keyPath = path.join(process.cwd(), 'localhost+1-key.pem');
+    const certPath = path.join(process.cwd(), 'localhost+1.pem');
+
+    server = https.createServer({ 
+      key: fs.readFileSync(keyPath), 
+      cert: fs.readFileSync(certPath) 
+    }, app);
+  }
 
   initWebSocket(server);
 
   if (process.env.NODE_ENV !== "test") {
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server is running on https://localhost:${PORT}`);
-      console.log(`GraphQL Sandbox is at https://localhost:${PORT}/graphql`);
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`GraphQL Sandbox is at port ${PORT}/graphql`);
     });
   }
 };
