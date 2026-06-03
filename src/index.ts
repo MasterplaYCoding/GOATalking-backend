@@ -60,7 +60,7 @@ const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI as string, {
       serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      family: 4 
     });
     console.log("✅ MongoDB Connected Successfully");
   } catch (error) {
