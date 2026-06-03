@@ -4,7 +4,7 @@ export const sendSecurityEmail = async (to: string, subject: string, text: strin
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
+      port: parseInt(process.env.SMTP_PORT as string) || 2525,
       secure: false, 
       auth: {
         user: process.env.EMAIL_USER,

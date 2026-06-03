@@ -58,9 +58,13 @@ const ensureSystemUserExists = async () => {
 
 const startServer = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI as string);
+    await mongoose.connect(process.env.MONGODB_URI as string, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    console.log("✅ MongoDB Connected Successfully");
   } catch (error) {
-    console.error(error);
+    console.error("❌ MongoDB Connection Error:", error);
   }
 
   const apolloServer = new ApolloServer({
