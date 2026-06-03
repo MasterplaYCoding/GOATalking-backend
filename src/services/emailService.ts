@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 
 export const sendSecurityEmail = async (to: string, subject: string, text: string) => {
+  // This will print your variables to the Render logs so we can spot the typo!
+  console.log(`🔍 DEBUG CONFIG: Host=[${process.env.SMTP_HOST}] Port=[${process.env.SMTP_PORT}] User=[${process.env.EMAIL_USER}]`);
+
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
