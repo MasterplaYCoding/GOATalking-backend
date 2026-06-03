@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { prisma } from "../db";
 
 async function askLocalLLM(username: string, actionLogs: string[]): Promise<boolean> {
-  return false; // Placeholder for actual LLM integration
   const prompt = `You are a strict cybersecurity AI. Analyze this user's recent actions.
 User: ${username}
 Recent Actions: 
