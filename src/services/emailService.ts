@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
 
 export const sendSecurityEmail = async (to: string, subject: string, text: string) => {
-  // This will print your variables to the Render logs so we can spot the typo!
   console.log(`🔍 DEBUG CONFIG: Host=[${process.env.SMTP_HOST}] Port=[${process.env.SMTP_PORT}] User=[${process.env.EMAIL_USER}]`);
 
   try {
@@ -16,7 +15,7 @@ export const sendSecurityEmail = async (to: string, subject: string, text: strin
     });
 
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: 'mateiursache2710@gmail.com',
       to,
       subject,
       text,
